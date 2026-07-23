@@ -44,9 +44,9 @@ export default function Dashboard() {
 
 /* ============ TAB 1: SALES LIFECYCLE ============ */
 function Lifecycle() {
-  const [f, setF] = useState({ stage: '', pipeline: '', source: '', type: '', status: '', origin: '', bucket: '', loss: '', from: '', to: '', q: '' });
+  const [f, setF] = useState({ stage: '', pipeline: '', source: '', type: '', status: '', origin: '', bucket: '', loss: '', from: '', to: '', closedFrom: '', closedTo: '', q: '' });
   const set = (k, v) => setF((p) => ({ ...p, [k]: v }));
-  const clear = () => setF({ stage: '', pipeline: '', source: '', type: '', status: '', origin: '', bucket: '', loss: '', from: '', to: '', q: '' });
+  const clear = () => setF({ stage: '', pipeline: '', source: '', type: '', status: '', origin: '', bucket: '', loss: '', from: '', to: '', closedFrom: '', closedTo: '', q: '' });
 
   const rows = useMemo(() => opps.filter((o) => {
     if (f.stage && o.stage !== f.stage) return false;
@@ -62,6 +62,8 @@ function Lifecycle() {
     if (f.status === 'Open' && o.outcome !== 'Open') return false;
     if (f.from && o.created && o.created < f.from) return false;
     if (f.to && o.created && o.created > f.to) return false;
+    if (f.closedFrom && (!o.closing || o.closing < f.closedFrom)) return false;
+    if (f.closedTo && (!o.closing || o.closing > f.closedTo)) return false;
     if (f.q) { const s = (o.name + ' ' + o.company).toLowerCase(); if (!s.includes(f.q.toLowerCase())) return false; }
     return true;
   }), [f]);
@@ -121,7 +123,8 @@ function Lifecycle() {
     { name: 'Overall', val: fmtNum(median(rows.map((o) => o.overallWks).filter((x) => x != null)), 1), unit: 'wks lead→close' },
   ];
 
-  const active = Object.entries(f).filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`);
+  const filterLabels = { stage: 'stage', pipeline: 'pipeline', source: 'source', type: 'type', status: 'status', origin: 'origin', bucket: 'bucket', loss: 'loss reason', from: 'created from', to: 'created to', closedFrom: 'closed from', closedTo: 'closed to', q: 'search' };
+  const active = Object.entries(f).filter(([, v]) => v).map(([k, v]) => `${filterLabels[k] || k}: ${v}`);
 
   return (
     <>
@@ -136,6 +139,8 @@ function Lifecycle() {
         <Sel label="Loss Reason" v={f.loss} set={(v) => set('loss', v)} opts={uniq(opps, 'lossReason')} />
         <div className="filter"><label>Created From</label><input type="date" value={f.from} onChange={(e) => set('from', e.target.value)} /></div>
         <div className="filter"><label>Created To</label><input type="date" value={f.to} onChange={(e) => set('to', e.target.value)} /></div>
+        <div className="filter"><label>Closed From</label><input type="date" value={f.closedFrom} onChange={(e) => set('closedFrom', e.target.value)} /></div>
+        <div className="filter"><label>Closed To</label><input type="date" value={f.closedTo} onChange={(e) => set('closedTo', e.target.value)} /></div>
         <div className="filter"><label>Search</label><input placeholder="opp or company" value={f.q} onChange={(e) => set('q', e.target.value)} /></div>
         <button className="clearbtn" onClick={clear}>Clear</button>
       </div>
