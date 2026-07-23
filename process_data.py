@@ -15,7 +15,9 @@ def clean(v):
     return str(v)
 
 # ---------- OPPORTUNITIES ----------
-o=pd.read_excel(U+'Opportunities_2026_06_08.xlsx')
+# NOTE: filename changes each pull (date-stamped) - update this to match
+# whatever Zoho export you actually have, e.g. 'Opportunities_2026_07_22.xlsx'
+o=pd.read_excel(U+'Opportunities.xlsx')
 riki=o[o['Opportunity Owner'].astype(str).str.contains('Riki',case=False,na=False)].copy()
 for c in ['Created Time','Closing Date','Lead-Created-Time','Modified Time']:
     riki[c]=pd.to_datetime(riki[c],errors='coerce')
@@ -28,9 +30,7 @@ def cat(s):
     return 'Open'
 riki['Outcome']=riki['Stage'].apply(cat)
 riki['Origin']=riki['Lead-Created-Time'].apply(lambda x:'From Lead' if pd.notna(x) else 'Direct Opp')
-# weeks
 riki['OppCycleWks']=(riki['Sales Cycle Duration']/7).round(1)
-# overall lead->close uses Lead Conversion Time (lead->opp) + cycle if from lead
 riki['LeadConvDays']=riki['Lead Conversion Time']
 riki['OverallWks']=(riki['Overall Sales Duration']/7).round(1)
 
@@ -72,7 +72,8 @@ json.dump(opps,open(OUT+'opportunities.json','w'),indent=1)
 print('opps:',len(opps))
 
 # ---------- STAGE HISTORY ----------
-s=pd.read_excel(U+'Stage_History__1_.xlsx')
+# NOTE: filename changes each pull - update to match your Zoho export
+s=pd.read_excel(U+'Stage_History.xlsx')
 sr=s[s['Opportunity Owner'].astype(str).str.contains('Riki',case=False,na=False)].copy()
 sr['Modified Time (Stage History)']=pd.to_datetime(sr['Modified Time (Stage History)'],errors='coerce')
 sr=sr.sort_values(['Opportunity Name','Modified Time (Stage History)'])
@@ -92,21 +93,23 @@ json.dump(hist,open(OUT+'stage_history.json','w'),indent=1)
 print('stage history:',len(hist))
 
 # ---------- LEADS (front funnel) ----------
-la=pd.read_excel(U+'Academic_Lead_Report.xlsx')       # unconverted
-lb=pd.read_excel(U+'Academic_Lead_Report__1_.xlsx')   # converted
+# UPDATED FORMAT (as of 2026-07-22 pull): Zoho now exports leads as two
+# reports that are each cleanly pre-filtered by an 'Is Converted' column
+# (True/False) - no more manual key-based dedupe needed like the old
+# two-file version. Just point these at whatever your two Academic Lead
+# Report exports are named:
+la=pd.read_excel(U+'Academic_Lead_Report_Unconverted.xlsx')   # Is Converted = False
+lb=pd.read_excel(U+'Academic_Lead_Report_Converted.xlsx')     # Is Converted = True
 for d in (la,lb):
     d['Created Time']=pd.to_datetime(d['Created Time'],errors='coerce')
 lb['Converted Date Time']=pd.to_datetime(lb['Converted Date Time'],errors='coerce')
-la['key']=la['Full Name'].astype(str)+'|'+la['Company'].astype(str)
-lb['key']=lb['Full Name'].astype(str)+'|'+lb['Company'].astype(str)
-la2=la[~la['key'].isin(lb['key'])].copy()
-la2['converted']=False; lb['converted']=True
+
 leads=[]
-for d in (la2,lb):
+for d, is_conv_flag in ((la,False),(lb,True)):
     for _,r in d.iterrows():
         conv=r.get('Converted Date Time')
         cdays=None
-        if r['converted'] and pd.notna(conv) and pd.notna(r['Created Time']):
+        if is_conv_flag and pd.notna(conv) and pd.notna(r['Created Time']):
             cdays=round((conv-r['Created Time']).total_seconds()/86400,1)
         leads.append({
             'created':clean(r['Created Time']),
@@ -114,7 +117,7 @@ for d in (la2,lb):
             'status':clean(r['Lead Status']),
             'company':clean(r['Company']),
             'pipeline':clean(r['Pipeline']),
-            'converted':bool(r['converted']),
+            'converted':bool(r['Is Converted']),
             'convDays':cdays,
         })
 json.dump(leads,open(OUT+'leads.json','w'),indent=1)
@@ -122,9 +125,10 @@ conv=sum(1 for l in leads if l['converted'])
 print('leads:',len(leads),'converted:',conv,'rate %.1f%%'%(100*conv/len(leads)))
 
 # ---------- META ----------
+from datetime import date
 meta={
  'owner':'Riki McClure',
- 'pulled':'2026-06-08',
+ 'pulled':str(date.today()),
  'oppCount':len(opps),
  'transitionCount':len(hist),
  'leadCount':len(leads),
